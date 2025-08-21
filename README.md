@@ -35,20 +35,20 @@ to get the laptop default screen identifier, an input device id list for devices
 ## Install
 
 The following package are required
-- tcl9 tl9
+- tcl9 tk9
 - tcl-dbus, to allow tcl access DBus: https://chiselapp.com/user/schelte/repository/dbus
 - iir-sensor-proxy, to make the accelerometer connect to DBus: https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/
 
-**Configure the screen, devices to rotate and to disable!**
 
 ```
 # install
-chmod +x screenrotator
+./config.sh
 sudo cp screenrotator /usr/local/bin/
 screenrotator
 
 # to autostart the screen rotator
 sudo cp screenrotator-autostart.desktop /etc/xdg/autostart/
+```
 
 ## Tcl and DBus
 
