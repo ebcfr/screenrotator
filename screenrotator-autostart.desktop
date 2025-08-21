@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Screen Rotator
+Exec=/usr/local/bin/screenrotator
+NoDisplay=true

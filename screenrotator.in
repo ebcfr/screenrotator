@@ -1,0 +1,140 @@
+#! /usr/bin/env tclsh9.0
+
+package require Tk
+package require dbus
+
+wm withdraw .
+
+set screen				$1
+set ids_to_rotate		$2
+set ids_to_disable		$3
+
+set last_orientation	normal
+set rot_allowed			1
+
+array set rotation {
+	normal 		{normal		none}
+	right-up	{right		cw}
+	left-up		{left		ccw}
+	bottom-up	{inverted	half}
+}
+
+proc disable_devices {args} {
+	foreach i {*}$args {
+		exec xinput disable $i
+	}
+}
+
+proc enable_devices {args} {
+	foreach i {*}$args {
+		exec xinput enable $i
+	}
+}
+
+proc handler {desc args} {
+	if {[lindex $args 0] == "net.hadess.SensorProxy"} {
+		if {[lindex $args {1 0}] == "AccelerometerOrientation"} {
+			set orientation [lindex $args {1 1}]
+			if {$orientation != $::last_orientation} {
+				set ::last_orientation $orientation
+				exec xrandr --output $::screen --rotate [lindex $::rotation($orientation) 0]
+				foreach i $::ids_to_rotate {
+					exec xsetwacom set $i Rotate [lindex $::rotation($orientation) 1]
+					exec xsetwacom set $i MapToOutput $::screen
+				}
+				if {$orientation != "normal"} {
+					disable_devices $::ids_to_disable
+				} else {
+					enable_devices $::ids_to_disable				
+				}
+			}
+		}
+	} elseif {[lindex $args 0] == "org.freedesktop.UPower"} {
+		if {[lindex $args {1 0}] == "LidIsClosed"} {
+			if {[lindex $args {1 1}] == 1} {
+				puts "Lid closed"
+				if {$::rot_allowed == 0} {
+					.iconmenu invoke 1
+				}
+				enable_devices $::ids_to_disable				
+			} else {
+				puts "Lid opened"
+			}
+		} elseif {[lindex $args {1 0}] == "OnBattery"} {
+			puts "on battery: [lindex $args {1 1}]"
+		}
+	}
+}
+
+# limit the use of pen and finger tip to the laptop screen
+foreach i $::ids_to_rotate {
+	exec xsetwacom set $i MapToOutput $::screen
+}
+
+dbus connect system
+
+if {![dbus call system -dest net.hadess.SensorProxy /net/hadess/SensorProxy org.freedesktop.DBus.Properties Get "net.hadess.SensorProxy" "HasAccelerometer"]} {
+	puts "No accelerometer available"
+	exit
+}
+
+puts "has accelerometer"
+
+# listen to ChangedProperties events
+dbus filter system add -interface org.freedesktop.DBus.Properties
+dbus listen system /org/freedesktop/UPower PropertiesChanged handler
+dbus listen system /net/hadess/SensorProxy PropertiesChanged handler
+dbus call system -dest net.hadess.SensorProxy /net/hadess/SensorProxy net.hadess.SensorProxy ClaimAccelerometer
+
+image create photo icn -data {
+	R0lGODlhFAAUAKEBAP7+/v///////////yH5BAEKAAIALAAAAAAUABQAAAI9lI+gyLwCQgDNKQrh
+	a28b/2GhY3GidoDpiamJuLhvOlarad9ZncfwidvxSkMVCOgxIltAHVOWkjBzliaiAAA7
+}
+
+image create photo icn_locked -data {
+	R0lGODlhFAAUAKEBAP7+/v///////////yH5BAEKAAIALAAAAAAUABQAAAJDlI8IyRCbIBMOWCMn
+	fdiE/zVcAobKSJZkhpTBqllyhGpTZV8YhMfSXyMdMr3IjxjUDZHHG22hbEAxH5YUZc1lbVxEAQA7
+}
+
+#### build the menu
+menu .iconmenu
+.iconmenu add command -label "Rotate" -state disabled -command {
+  puts "rotate now"
+  set orientation [dbus call system -dest net.hadess.SensorProxy /net/hadess/SensorProxy org.freedesktop.DBus.Properties Get "net.hadess.SensorProxy" "AccelerometerOrientation"]
+  handler {} net.hadess.SensorProxy [list AccelerometerOrientation $orientation] {}
+}
+.iconmenu add command -label "Lock" -command {
+  set ::rot_allowed [expr !$::rot_allowed]
+  if {$::rot_allowed == 1} {
+    puts "rotation unlocked"
+    # update menu and icon
+    .iconmenu entryconfigure 0 -state disabled
+    .iconmenu entryconfigure 1 -label "Lock"
+    tk systray configure -image icn
+    # enable listening to accelerometer events
+    dbus listen system /net/hadess/SensorProxy PropertiesChanged handler
+  } else {
+    puts "rotation locked"
+    # update menu and icon
+    .iconmenu entryconfigure 0 -state normal
+    .iconmenu entryconfigure 1 -label "Unlock"
+    tk systray configure -image icn_locked
+    # disable listening to accelerometer events
+    dbus listen system /net/hadess/SensorProxy PropertiesChanged {}
+  }
+}
+.iconmenu add command -label "Quit" -command {
+  dbus call system -dest net.hadess.SensorProxy /net/hadess/SensorProxy net.hadess.SensorProxy ReleaseAccelerometer
+  dbus listen system /net/hadess/SensorProxy PropertiesChanged {}
+  dbus listen system /org/freedesktop/UPower PropertiesChanged {}
+  dbus close system
+  tk systray destroy
+  exit
+}
+
+#### add the icon in the systray
+tk systray create -image icn -text "Screen Rotator" \
+  -button1 {
+    tk_popup .iconmenu [winfo pointerx .] [winfo pointery .]
+  }
+
