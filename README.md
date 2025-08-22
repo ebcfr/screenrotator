@@ -12,7 +12,7 @@ By default, the screen is in normal mode and all the devices are enabled. Physic
 
 Back to `normal`, all the devices are enabled. If the lid is closed, all the devices are enabled.
 
-An icon menu allows to disable the automatic rotation. When disabled, the rotation is still available using the Rotate menu item. The rotation is then on demand. Automatic rotation is restaured when the lid is closed
+An icon menu allows to disable the automatic rotation. When disabled, the rotation is still available using the Rotate menu item. The rotation is then on demand. Automatic rotation is restaured when the lid is closed.
 
 ## Configuration
 
